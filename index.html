@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Floresta das 99 Noites: Jurerê (v5.1)</title>
+    <title>Floresta das 99 Noites: Jurerê (v5.2)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <style>
         html, body, #root { margin: 0; padding: 0; height: 100%; width: 100%; background-color: #0c0a09; color: #e2e8f0; font-family: sans-serif; overflow: hidden; }
         .leaflet-container { height: 100%; width: 100%; background-color: #18181b; }
@@ -70,6 +70,7 @@
         ];
         
         function getDistance(from, to) {
+            if (!from || !to) return Infinity;
             const R = 6371e3; // Metros
             const φ1 = from.lat * Math.PI / 180;
             const φ2 = to.lat * Math.PI / 180;
@@ -82,12 +83,22 @@
 
         const useGameState = () => {
             const [state, setState] = useState(() => {
-                const savedState = localStorage.getItem('99NoitesGameState');
-                return savedState ? JSON.parse(savedState) : {
-                    score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS,
-                };
+                try {
+                    const savedState = localStorage.getItem('99NoitesGameState');
+                    return savedState ? JSON.parse(savedState) : {
+                        score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS,
+                    };
+                } catch (error) {
+                    return { score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS };
+                }
             });
-            useEffect(() => { localStorage.setItem('99NoitesGameState', JSON.stringify(state)); }, [state]);
+            useEffect(() => {
+                try {
+                    localStorage.setItem('99NoitesGameState', JSON.stringify(state));
+                } catch (error) {
+                    console.error("Failed to save game state:", error);
+                }
+            }, [state]);
             return [state, setState];
         };
 
@@ -111,21 +122,31 @@
             const [view, setView] = useState('menu');
             const [playerLocation, setPlayerLocation] = useState(null);
             const [activePoints, setActivePoints] = useState(() => {
-                const savedPoints = localStorage.getItem('99NoitesActivePoints');
-                return savedPoints ? JSON.parse(savedPoints) : [];
+                try {
+                    const savedPoints = localStorage.getItem('99NoitesActivePoints');
+                    return savedPoints ? JSON.parse(savedPoints) : [];
+                } catch (error) {
+                    return [];
+                }
             });
             const [discoveredPoint, setDiscoveredPoint] = useState(null);
             const [gameState, setGameState] = useGameState();
             const audio = useAudio();
 
-            useEffect(() => { localStorage.setItem('99NoitesActivePoints', JSON.stringify(activePoints)); }, [activePoints]);
+            useEffect(() => {
+                try {
+                    localStorage.setItem('99NoitesActivePoints', JSON.stringify(activePoints));
+                } catch (error) {
+                    console.error("Failed to save active points:", error);
+                }
+            }, [activePoints]);
 
             const startGame = useCallback((mode) => {
                 let points = [];
                 if (mode === 'jurema') {
                     points = GAME_DATA.juremaPoints.map(point => {
                         const creature = GAME_DATA.creatures[Math.floor(Math.random() * GAME_DATA.creatures.length)];
-                        return { ...point, ...creature };
+                        return { ...point, ...creature, uniqueId: `${point.id}-${Date.now()}` };
                     });
                 }
                 setActivePoints(points);
@@ -136,16 +157,13 @@
             const resetGame = () => {
                 localStorage.removeItem('99NoitesGameState');
                 localStorage.removeItem('99NoitesActivePoints');
-                setGameState({ score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS });
-                setActivePoints([]);
-                setView('menu');
+                window.location.reload();
             }
 
             const handleEncounter = useCallback((point) => {
                 setDiscoveredPoint(point);
-                setActivePoints(prev => prev.filter(p => p.id !== point.id));
+                setActivePoints(prev => prev.filter(p => p.uniqueId !== point.uniqueId));
                 
-                // Atualiza missões de localização
                 setGameState(prev => {
                     const newMissions = prev.missions.map(m => {
                         if (m.type === 'location' && !m.completed && m.locationName === point.name) {
@@ -172,7 +190,7 @@
                 case 'battle': return <BattleView playerState={gameState} setPlayerState={setGameState} enemy={discoveredPoint} setView={setView} audio={audio} />;
                 case 'inventory': return <InventoryView inventory={gameState.inventory} onClose={() => setView('map')} />;
                 case 'missions': return <MissionsView missions={gameState.missions} onClose={() => setView('map')} />;
-                default: return <div className="text-white flex items-center justify-center h-full">Carregando...</div>;
+                default: return <div className="text-white flex items-center justify-center h-full">Carregando Jogo...</div>;
             }
         };
 
@@ -183,7 +201,7 @@
                 <h2 className="text-2xl text-yellow-400 mb-8">Jurerê</h2>
                 <div className="space-y-4 w-full max-w-xs">
                     <button onClick={() => onStart('jurema')} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-4 px-8 rounded-lg text-2xl shadow-lg w-full">INICIAR JOGO</button>
-                    <button onClick={onReset} className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg text-sm w-full">Resetar Progresso</button>
+                    <button onClick={onReset} className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg text-sm w-full mt-4">Resetar Progresso</button>
                 </div>
             </div>
         );
@@ -213,20 +231,18 @@
 
             useEffect(() => {
                 if (!mapRef.current) return;
-                const currentPointIds = activePoints.map(p => p.id);
-                // Remove markers that are no longer active
+                const currentPointIds = activePoints.map(p => p.uniqueId);
                 Object.keys(pointMarkersRef.current).forEach(markerId => {
-                    if (!currentPointIds.includes(parseInt(markerId))) {
+                    if (!currentPointIds.includes(markerId)) {
                         mapRef.current.removeLayer(pointMarkersRef.current[markerId]);
                         delete pointMarkersRef.current[markerId];
                     }
                 });
-                // Add new markers
                 activePoints.forEach(p => {
-                    if (!pointMarkersRef.current[p.id]) {
+                    if (!pointMarkersRef.current[p.uniqueId]) {
                         const icon = L.divIcon({ className: 'point-icon', html: p.icon });
                         const marker = L.marker([p.lat, p.lon], { icon }).addTo(mapRef.current);
-                        pointMarkersRef.current[p.id] = marker;
+                        pointMarkersRef.current[p.uniqueId] = marker;
                     }
                 });
             }, [activePoints]);
@@ -237,7 +253,7 @@
                     let closestPoint = null;
                     let minDistance = Infinity;
                     for (const point of activePoints) {
-                        const distance = getDistance(playerLocation, point);
+                        const distance = getDistance(playerLocation, {lat: point.lat, lng: point.lon});
                         if (distance < minDistance) {
                             minDistance = distance;
                             closestPoint = point;
@@ -265,7 +281,7 @@
                 if (score <= 75) return { name: 'Ouro', icon: '🥇' };
                 return { name: 'Diamante', icon: '💎' };
             }, [score]);
-            const hpPercentage = (hp / maxHP) * 100;
+            const hpPercentage = Math.max(0, (hp / maxHP) * 100);
 
             return (
                 <div className="absolute top-0 left-0 right-0 z-[1000] p-3 bg-black bg-opacity-60 text-white flex justify-between items-center text-shadow-lg shadow-black/50">
@@ -273,7 +289,7 @@
                         <div className="text-3xl font-bold">{score} pts</div>
                         <div className="text-lg">{playerRank.icon} {playerRank.name}</div>
                         <div className="w-24 h-4 bg-gray-700 rounded-full overflow-hidden mt-1 border border-gray-500">
-                           <div className="h-full bg-red-600" style={{ width: `${hpPercentage}%`}}></div>
+                           <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${hpPercentage}%`}}></div>
                         </div>
                     </div>
                     <div className="flex space-x-3">
@@ -319,12 +335,12 @@
             const [turn, setTurn] = useState('player');
             const [playerShake, setPlayerShake] = useState(false);
             const [enemyShake, setEnemyShake] = useState(false);
-            const [battleResult, setBattleResult] = useState(null); // 'win' or 'lose'
+            const [battleResult, setBattleResult] = useState(null);
 
             const playerAttack = () => {
                 if (turn !== 'player' || battleResult) return;
                 
-                const damageDealt = Math.floor(Math.random() * 10) + 5; // Dano do jogador: 5-14
+                const damageDealt = Math.floor(Math.random() * 10) + 5;
                 const newEnemyHP = Math.max(0, enemyHP - damageDealt);
                 setEnemyHP(newEnemyHP);
                 setMessage(`Você atacou e causou ${damageDealt} de dano!`);
@@ -356,7 +372,7 @@
             
             useEffect(() => {
                 if (turn === 'enemy' && !battleResult) {
-                    setTimeout(() => {
+                    const enemyTurnTimeout = setTimeout(() => {
                         const damageReceived = Math.floor(Math.random() * enemy.damage) + 1;
                         setMessage(`${enemy.name} atacou e causou ${damageReceived} de dano!`);
                         setPlayerShake(true);
@@ -375,17 +391,19 @@
                         });
                         setTurn('player');
                     }, 1500);
+                    return () => clearTimeout(enemyTurnTimeout);
                 }
             }, [turn, battleResult]);
             
             const handleEndBattle = () => {
                 setView('map');
-                audio.loop('bg-music');
+                if(!battleResult || battleResult === 'win') {
+                   audio.loop('bg-music');
+                }
             }
 
             return (
                 <div className="flex flex-col items-center justify-between h-screen bg-black p-4 animate-fadeIn">
-                    {/* ENEMY INFO */}
                     <div className="w-full text-center">
                         <div className={`text-9xl mb-4 transition-transform duration-300 ${enemyShake ? 'animate-shake' : ''}`}>{enemy.icon}</div>
                         <h2 className="text-3xl font-bold">{enemy.name}</h2>
@@ -395,12 +413,11 @@
                         <p className="text-lg">{enemyHP} / {enemy.hp} HP</p>
                     </div>
 
-                    {/* PLAYER INFO & ACTIONS */}
                     <div className="w-full text-center">
                         <p className="text-xl h-12">{message}</p>
                         {!battleResult && (
                              <div className="flex space-x-4 mt-4 w-full max-w-sm mx-auto">
-                                <button onClick={playerAttack} disabled={turn !== 'player'} className="bg-red-700 hover:bg-red-800 disabled:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg text-2xl w-full">ATACAR</button>
+                                <button onClick={playerAttack} disabled={turn !== 'player'} className="bg-red-700 hover:bg-red-800 disabled:bg-gray-600 disabled:text-gray-400 text-white font-bold py-4 px-8 rounded-lg text-2xl w-full">ATACAR</button>
                             </div>
                         )}
                         {battleResult && (
@@ -411,6 +428,10 @@
                             </div>
                         )}
                          <div className={`text-5xl mt-8 transition-transform duration-300 ${playerShake ? 'animate-shake' : ''}`}>🏃</div>
+                         <div className="w-full max-w-sm h-6 bg-gray-700 rounded-full overflow-hidden mt-2 border-2 border-gray-500 mx-auto">
+                           <div className="h-full bg-green-500" style={{ width: `${(playerState.playerHP / playerState.maxPlayerHP) * 100}%`}}></div>
+                        </div>
+                         <p className="text-lg">{playerState.playerHP} / {playerState.maxPlayerHP} HP</p>
                     </div>
                 </div>
             );
@@ -418,19 +439,20 @@
         
         const InventoryView = ({ inventory, onClose }) => {
              const groupedInventory = inventory.reduce((acc, item) => {
-                acc[item.id] = acc[item.id] || { ...item, count: 0 };
-                acc[item.id].count++;
+                const key = item.id;
+                acc[key] = acc[key] || { ...item, count: 0 };
+                acc[key].count++;
                 return acc;
             }, {});
 
              return (
-                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn">
+                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn backdrop-blur-sm">
                    <h2 className="text-4xl font-bold mb-6 text-center text-yellow-400">Inventário</h2>
                    <div className="flex-grow overflow-y-auto pr-2">
                        {Object.values(groupedInventory).length > 0 ? (
                            <ul className="space-y-3">
                                {Object.values(groupedInventory).map(item => (
-                                   <li key={item.id} className="flex items-center bg-gray-800 p-3 rounded-lg">
+                                   <li key={item.uniqueId || item.id} className="flex items-center bg-gray-800 p-3 rounded-lg">
                                        <div className="text-4xl mr-4">{item.icon}</div>
                                        <div className="flex-grow">
                                            <p className="font-bold text-lg">{item.name}</p>
@@ -451,18 +473,20 @@
         
         const MissionsView = ({ missions, onClose }) => {
             return (
-                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn">
+                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn backdrop-blur-sm">
                    <h2 className="text-4xl font-bold mb-6 text-center text-yellow-400">Missões</h2>
                    <div className="flex-grow overflow-y-auto pr-2">
                        <ul className="space-y-3">
                            {missions.map(mission => (
                                <li key={mission.id} className={`flex flex-col bg-gray-800 p-3 rounded-lg ${mission.completed ? 'border-2 border-green-500' : ''}`}>
-                                   <p className="font-bold text-lg">{mission.text}</p>
-                                   <div className="w-full h-5 bg-gray-700 rounded-full overflow-hidden mt-2 border border-gray-500">
-                                      <div className="h-full bg-yellow-500 transition-all duration-500 text-right pr-2 text-black text-sm" style={{ width: `${(mission.current / mission.target) * 100}%`}}>
-                                          {mission.current} / {mission.target}
-                                      </div>
-                                   </div>
+                                   <p className={`font-bold text-lg ${mission.completed ? 'line-through text-gray-500' : ''}`}>{mission.text}</p>
+                                   {!mission.completed && (
+                                       <div className="w-full h-5 bg-gray-700 rounded-full overflow-hidden mt-2 border border-gray-500">
+                                          <div className="h-full bg-yellow-500 transition-all duration-500 flex items-center justify-end pr-2 text-black text-sm" style={{ width: `${Math.min(100, (mission.current / mission.target) * 100)}%`}}>
+                                              {mission.current} / {mission.target}
+                                          </div>
+                                       </div>
+                                   )}
                                    {mission.completed && <p className="text-green-400 font-bold text-center mt-2">CONCLUÍDA!</p>}
                                </li>
                            ))}
