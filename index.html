@@ -3,144 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Floresta das 99 Noites: Jurerê (v4 - Edição Completa)</title>
+    <title>Floresta das 99 Noites: Jurerê (v5.1)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         html, body, #root { margin: 0; padding: 0; height: 100%; width: 100%; background-color: #0c0a09; color: #e2e8f0; font-family: sans-serif; overflow: hidden; }
-        .leaflet-container { height: 100%; width: 100%; }
+        .leaflet-container { height: 100%; width: 100%; background-color: #18181b; }
         .leaflet-control-zoom, .leaflet-control-attribution { display: none; }
-        /* ANIMAÇÕES */
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
         .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
         .animate-pulse { animation: pulse 2s infinite; }
-        .animate-shake { animation: shake 0.3s linear; }
-        /* ÍCONES CUSTOMIZADOS */
+        .animate-shake { animation: shake 0.3s linear forwards; }
         .player-icon { font-size: 2.5rem; filter: drop-shadow(0 0 5px #facc15); }
-        .point-icon { font-size: 1.8rem; text-shadow: 0 0 8px #000; }
+        .point-icon { font-size: 1.8rem; text-shadow: 0 0 8px #000; opacity: 0.9; }
+        .hud-icon { font-size: 2.5rem; filter: drop-shadow(0 0 3px #000); }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <audio id="bg-music" loop src="https://www.myinstants.com/media/sounds/twilight-forest-ost-la-la-la.mp3"></audio>
-    <audio id="sfx-collect" src="https://www.myinstants.com/media/sounds/item-collect.mp3"></audio>
-    <audio id="sfx-battle" src="https://www.myinstants.com/media/sounds/undertale-battle-start.mp3"></audio>
-    <audio id="sfx-hit" src="https://www.myinstants.com/media/sounds/punch-a-rock.mp3"></audio>
-    <audio id="sfx-win" src="https://www.myinstants.com/media/sounds/victory-fanfare-remix.mp3"></audio>
+    <audio id="bg-music" loop src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/sample-3.mp3"></audio>
+    <audio id="sfx-collect" src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/OOT_Get_Small_Item.wav"></audio>
+    <audio id="sfx-battle" src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/FF7_Battle_Start.wav"></audio>
+    <audio id="sfx-hit" src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/punch.wav"></audio>
+    <audio id="sfx-win" src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/FF7_Victory_Fanfare.wav"></audio>
+    <audio id="sfx-lose" src="https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/main/13-game-over.mp3"></audio>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-        const GAME_DATA = { /* ... Seus dados de criaturas aqui ... */ };
-        const CAPTURE_RADIUS_METERS = 15;
-        const INITIAL_MISSIONS = [ /* ... Suas missões iniciais aqui ... */ ];
+        const GAME_DATA = {
+            creatures: [
+                { id: 1, name: "Cervo/Wendigo", rarity: "LENDÁRIO", points: 30, type: 'vilao', hp: 200, damage: 25, icon: '🦌' },
+                { id: 2, name: "Alpha Wolf", rarity: "ÉPICO", points: 20, type: 'vilao', hp: 120, damage: 15, icon: '🐺' },
+                { id: 3, name: "Cultist King", rarity: "ÉPICO", points: 20, type: 'vilao', hp: 100, damage: 12, icon: '👑' },
+                { id: 4, name: "Urso", rarity: "ÉPICO", points: 20, type: 'vilao', hp: 150, damage: 18, icon: '🐻' },
+                { id: 5, name: "Katana", rarity: "ÉPICO", points: 20, type: 'item', icon: '⚔️' },
+                { id: 6, name: "Lanterna", rarity: "ÉPICO", points: 20, type: 'item', icon: '🔦' },
+                { id: 7, name: "Lobo", rarity: "RARO", points: 10, type: 'vilao', hp: 60, damage: 8, icon: '🐺' },
+                { id: 8, name: "Cultista", rarity: "RARO", points: 10, type: 'vilao', hp: 50, damage: 7, icon: '👤' },
+                { id: 9, name: "Raposa", rarity: "RARO", points: 10, type: 'neutro', icon: '🦊' },
+                { id: 10, name: "Tocha", rarity: "RARO", points: 10, type: 'item', icon: '🔥' },
+                { id: 11, name: "Coelho", rarity: "COMUM", points: 5, type: 'neutro', icon: '🐰' },
+                { id: 12, name: "Madeira", rarity: "COMUM", points: 5, type: 'item', icon: '🪵' },
+                { id: 13, name: "Cogumelo", rarity: "COMUM", points: 5, type: 'item', icon: '🍄' },
+            ],
+            juremaPoints: [
+                { id: 101, name: "Praia de Jurerê", lat: -27.4373, lon: -48.4947 },
+                { id: 102, name: "Open Shopping", lat: -27.4389, lon: -48.5034 },
+                { id: 103, name: "Praça da Praia", lat: -27.4365, lon: -48.4971 },
+                { id: 104, name: "Avenida dos Búzios", lat: -27.4411, lon: -48.5082 },
+                { id: 105, name: "Calçadão de Jurerê", lat: -27.4359, lon: -48.4925 },
+                { id: 106, name: "Bosque Amoraeville", lat: -27.4420, lon: -48.5050 },
+            ]
+        };
+        const CAPTURE_RADIUS_METERS = 20;
+        const INITIAL_MISSIONS = [
+            { id: 1, text: "Colete 3 itens Comuns", target: 3, current: 0, type: 'collect', rarity: 'COMUM', completed: false },
+            { id: 2, text: "Derrote 2 Vilões", target: 2, current: 0, type: 'defeat', completed: false },
+            { id: 3, text: "Encontre o Open Shopping", target: 1, current: 0, type: 'location', locationName: 'Open Shopping', completed: false },
+        ];
+        
+        function getDistance(from, to) {
+            const R = 6371e3; // Metros
+            const φ1 = from.lat * Math.PI / 180;
+            const φ2 = to.lat * Math.PI / 180;
+            const Δφ = (to.lat - from.lat) * Math.PI / 180;
+            const Δλ = (to.lon - from.lng) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
-        // --- HOOKS CUSTOMIZADOS ---
         const useGameState = () => {
             const [state, setState] = useState(() => {
                 const savedState = localStorage.getItem('99NoitesGameState');
                 return savedState ? JSON.parse(savedState) : {
-                    score: 0,
-                    inventory: [],
-                    playerHP: 100,
-                    maxPlayerHP: 100,
-                    missions: INITIAL_MISSIONS,
+                    score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS,
                 };
             });
-            useEffect(() => {
-                localStorage.setItem('99NoitesGameState', JSON.stringify(state));
-            }, [state]);
+            useEffect(() => { localStorage.setItem('99NoitesGameState', JSON.stringify(state)); }, [state]);
             return [state, setState];
         };
 
         const useAudio = () => {
-            const play = (id) => {
+            const play = useCallback((id) => {
                 const sound = document.getElementById(id);
-                if (sound) {
-                    sound.currentTime = 0;
-                    sound.play().catch(e => console.log("Audio play failed:", e));
-                }
-            };
-            const loop = (id) => {
-                 const sound = document.getElementById(id);
-                 if(sound) sound.play().catch(e => console.log("Audio loop failed:", e));
-            };
-            const stop = (id) => {
-                 const sound = document.getElementById(id);
-                 if(sound) sound.pause();
-            }
+                if (sound) { sound.currentTime = 0; sound.play().catch(e => {}); }
+            }, []);
+            const loop = useCallback((id) => {
+                const sound = document.getElementById(id);
+                if (sound) { sound.play().catch(e => {}); }
+            }, []);
+            const stop = useCallback((id) => {
+                const sound = document.getElementById(id);
+                if (sound) { sound.pause(); }
+            }, []);
             return { play, loop, stop };
         };
 
-        // --- COMPONENTES PRINCIPAIS ---
         const App = () => {
             const [view, setView] = useState('menu');
             const [playerLocation, setPlayerLocation] = useState(null);
-            const [activePoints, setActivePoints] = useState([]);
+            const [activePoints, setActivePoints] = useState(() => {
+                const savedPoints = localStorage.getItem('99NoitesActivePoints');
+                return savedPoints ? JSON.parse(savedPoints) : [];
+            });
             const [discoveredPoint, setDiscoveredPoint] = useState(null);
-            const [battleState, setBattleState] = useState(null);
             const [gameState, setGameState] = useGameState();
             const audio = useAudio();
 
-            // Lógica de jogo aqui...
-            const startGame = (mode) => {
-                // ...
+            useEffect(() => { localStorage.setItem('99NoitesActivePoints', JSON.stringify(activePoints)); }, [activePoints]);
+
+            const startGame = useCallback((mode) => {
+                let points = [];
+                if (mode === 'jurema') {
+                    points = GAME_DATA.juremaPoints.map(point => {
+                        const creature = GAME_DATA.creatures[Math.floor(Math.random() * GAME_DATA.creatures.length)];
+                        return { ...point, ...creature };
+                    });
+                }
+                setActivePoints(points);
                 audio.loop('bg-music');
                 setView('map');
-            };
+            }, [audio]);
             
-            const handleEncounter = (point) => {
+            const resetGame = () => {
+                localStorage.removeItem('99NoitesGameState');
+                localStorage.removeItem('99NoitesActivePoints');
+                setGameState({ score: 0, inventory: [], playerHP: 100, maxPlayerHP: 100, missions: INITIAL_MISSIONS });
+                setActivePoints([]);
+                setView('menu');
+            }
+
+            const handleEncounter = useCallback((point) => {
                 setDiscoveredPoint(point);
                 setActivePoints(prev => prev.filter(p => p.id !== point.id));
-                if (point.type === 'vilao') {
+                
+                // Atualiza missões de localização
+                setGameState(prev => {
+                    const newMissions = prev.missions.map(m => {
+                        if (m.type === 'location' && !m.completed && m.locationName === point.name) {
+                            return { ...m, current: m.current + 1, completed: m.current + 1 >= m.target };
+                        }
+                        return m;
+                    });
+                    return { ...prev, missions: newMissions };
+                });
+
+                 if (point.type === 'vilao') {
                     audio.stop('bg-music');
                     audio.play('sfx-battle');
-                    setBattleState({ enemyHP: point.hp, message: 'Um inimigo apareceu!', turn: 'player' });
                     setView('battle');
                 } else {
                     setView('collect');
                 }
-            };
+            }, [audio, setGameState]);
 
-            const handleCollect = () => {
-                audio.play('sfx-collect');
-                setGameState(prev => {
-                    // Lógica de adicionar ao inventário e score
-                    return prev;
-                });
-                setView('map');
-                audio.loop('bg-music');
-            };
-            
-            // ... mais lógica
-
-            // RENDERIZAÇÃO CONDICIONAL DAS TELAS
             switch (view) {
-                case 'menu': return <MenuView onStart={startGame} />;
+                case 'menu': return <MenuView onStart={startGame} onReset={resetGame} />;
                 case 'map': return <MapView onEncounter={handleEncounter} playerLocation={playerLocation} setPlayerLocation={setPlayerLocation} activePoints={activePoints} gameState={gameState} setView={setView} />;
-                case 'collect': return <CollectView point={discoveredPoint} onCollect={handleCollect} />;
-                case 'battle': return <BattleView playerState={gameState} setPlayerState={setGameState} enemy={discoveredPoint} battleState={battleState} setBattleState={setBattleState} setView={setView} audio={audio} />;
+                case 'collect': return <CollectView point={discoveredPoint} setGameState={setGameState} setView={setView} audio={audio} />;
+                case 'battle': return <BattleView playerState={gameState} setPlayerState={setGameState} enemy={discoveredPoint} setView={setView} audio={audio} />;
                 case 'inventory': return <InventoryView inventory={gameState.inventory} onClose={() => setView('map')} />;
                 case 'missions': return <MissionsView missions={gameState.missions} onClose={() => setView('map')} />;
-                default: return <div>Carregando...</div>;
+                default: return <div className="text-white flex items-center justify-center h-full">Carregando...</div>;
             }
         };
 
-        // --- COMPONENTES DE TELA (VIEWS) ---
+        const MenuView = ({ onStart, onReset }) => (
+             <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white text-center p-4 animate-fadeIn">
+                <div className="text-8xl mb-4">🌲</div>
+                <h1 className="text-5xl font-bold mb-2">Floresta das 99 Noites</h1>
+                <h2 className="text-2xl text-yellow-400 mb-8">Jurerê</h2>
+                <div className="space-y-4 w-full max-w-xs">
+                    <button onClick={() => onStart('jurema')} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-4 px-8 rounded-lg text-2xl shadow-lg w-full">INICIAR JOGO</button>
+                    <button onClick={onReset} className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg text-sm w-full">Resetar Progresso</button>
+                </div>
+            </div>
+        );
+
         const MapView = ({ onEncounter, playerLocation, setPlayerLocation, activePoints, gameState, setView }) => {
             const mapRef = useRef(null);
             const playerMarkerRef = useRef(null);
+            const pointMarkersRef = useRef({});
 
-            useEffect(() => { /* Lógica do mapa aqui */ }, []);
+            useEffect(() => {
+                if (mapRef.current) return;
+                const map = L.map('map-container', { zoomControl: false }).setView([-27.4373, -48.4947], 15);
+                mapRef.current = map;
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+                map.locate({ setView: true, maxZoom: 17, watch: true, enableHighAccuracy: true });
+                map.on('locationfound', (e) => {
+                    setPlayerLocation(e.latlng);
+                    if (playerMarkerRef.current) {
+                        playerMarkerRef.current.setLatLng(e.latlng);
+                    } else {
+                        const playerIcon = L.divIcon({ className: 'player-icon', html: "🏃" });
+                        playerMarkerRef.current = L.marker(e.latlng, { icon: playerIcon }).addTo(map);
+                    }
+                });
+                map.on('locationerror', () => alert("Não foi possível obter sua localização. Habilite o GPS."));
+            }, []);
 
-            useEffect(() => { /* Game Loop de verificação de proximidade aqui */ }, [playerLocation, activePoints]);
+            useEffect(() => {
+                if (!mapRef.current) return;
+                const currentPointIds = activePoints.map(p => p.id);
+                // Remove markers that are no longer active
+                Object.keys(pointMarkersRef.current).forEach(markerId => {
+                    if (!currentPointIds.includes(parseInt(markerId))) {
+                        mapRef.current.removeLayer(pointMarkersRef.current[markerId]);
+                        delete pointMarkersRef.current[markerId];
+                    }
+                });
+                // Add new markers
+                activePoints.forEach(p => {
+                    if (!pointMarkersRef.current[p.id]) {
+                        const icon = L.divIcon({ className: 'point-icon', html: p.icon });
+                        const marker = L.marker([p.lat, p.lon], { icon }).addTo(mapRef.current);
+                        pointMarkersRef.current[p.id] = marker;
+                    }
+                });
+            }, [activePoints]);
+
+            useEffect(() => {
+                if (!playerLocation || activePoints.length === 0) return;
+                const checkInterval = setInterval(() => {
+                    let closestPoint = null;
+                    let minDistance = Infinity;
+                    for (const point of activePoints) {
+                        const distance = getDistance(playerLocation, point);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestPoint = point;
+                        }
+                    }
+                    if (closestPoint && minDistance <= CAPTURE_RADIUS_METERS) {
+                        onEncounter(closestPoint);
+                    }
+                }, 2000);
+                return () => clearInterval(checkInterval);
+            }, [playerLocation, activePoints, onEncounter]);
 
             return (
                 <div className="relative h-full w-full">
@@ -150,37 +258,221 @@
             );
         };
         
-        const BattleView = ({ playerState, setPlayerState, enemy, battleState, setBattleState, setView, audio }) => {
-            const [shake, setShake] = useState(false);
-            
+        const HUD = ({ score, hp, maxHP, setView }) => {
+            const playerRank = useMemo(() => {
+                if (score <= 25) return { name: 'Bronze', icon: '🥉' };
+                if (score <= 50) return { name: 'Prata', icon: '🥈' };
+                if (score <= 75) return { name: 'Ouro', icon: '🥇' };
+                return { name: 'Diamante', icon: '💎' };
+            }, [score]);
+            const hpPercentage = (hp / maxHP) * 100;
+
+            return (
+                <div className="absolute top-0 left-0 right-0 z-[1000] p-3 bg-black bg-opacity-60 text-white flex justify-between items-center text-shadow-lg shadow-black/50">
+                    <div className="text-left">
+                        <div className="text-3xl font-bold">{score} pts</div>
+                        <div className="text-lg">{playerRank.icon} {playerRank.name}</div>
+                        <div className="w-24 h-4 bg-gray-700 rounded-full overflow-hidden mt-1 border border-gray-500">
+                           <div className="h-full bg-red-600" style={{ width: `${hpPercentage}%`}}></div>
+                        </div>
+                    </div>
+                    <div className="flex space-x-3">
+                         <button onClick={() => setView('missions')} className="hud-icon">📜</button>
+                         <button onClick={() => setView('inventory')} className="hud-icon">🎒</button>
+                    </div>
+                </div>
+            )
+        };
+        
+        const CollectView = ({ point, setGameState, setView, audio }) => {
+            const handleCollect = () => {
+                audio.play('sfx-collect');
+                setGameState(prev => {
+                    const newInventory = [...prev.inventory, point];
+                    const newScore = prev.score + point.points;
+                    const newMissions = prev.missions.map(m => {
+                         if (m.type === 'collect' && !m.completed && m.rarity === point.rarity) {
+                            const newCurrent = m.current + 1;
+                            return { ...m, current: newCurrent, completed: newCurrent >= m.target };
+                        }
+                        return m;
+                    });
+                    return { ...prev, score: newScore, inventory: newInventory, missions: newMissions };
+                });
+                setView('map');
+                audio.loop('bg-music');
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white text-center p-4 animate-fadeIn">
+                    <div className="text-9xl mb-8 animate-pulse">{point.icon}</div>
+                    <h2 className="text-4xl font-bold mb-2">Você encontrou: {point.name}!</h2>
+                    <p className="text-xl text-yellow-400 mb-8">+{point.points} pontos</p>
+                    <button onClick={handleCollect} className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-2xl">COLETAR</button>
+                </div>
+            );
+        };
+        
+        const BattleView = ({ playerState, setPlayerState, enemy, setView, audio }) => {
+            const [enemyHP, setEnemyHP] = useState(enemy.hp);
+            const [message, setMessage] = useState(`Um ${enemy.name} selvagem apareceu!`);
+            const [turn, setTurn] = useState('player');
+            const [playerShake, setPlayerShake] = useState(false);
+            const [enemyShake, setEnemyShake] = useState(false);
+            const [battleResult, setBattleResult] = useState(null); // 'win' or 'lose'
+
             const playerAttack = () => {
-                // ... lógica de ataque
+                if (turn !== 'player' || battleResult) return;
+                
+                const damageDealt = Math.floor(Math.random() * 10) + 5; // Dano do jogador: 5-14
+                const newEnemyHP = Math.max(0, enemyHP - damageDealt);
+                setEnemyHP(newEnemyHP);
+                setMessage(`Você atacou e causou ${damageDealt} de dano!`);
+                setEnemyShake(true);
+                setTimeout(() => setEnemyShake(false), 300);
                 audio.play('sfx-hit');
-                setShake(true);
-                setTimeout(() => setShake(false), 300);
+
+                if (newEnemyHP <= 0) {
+                    setBattleResult('win');
+                    setMessage(`${enemy.name} foi derrotado!`);
+                    audio.stop('bg-music');
+                    audio.play('sfx-win');
+                    setPlayerState(prev => {
+                        const newScore = prev.score + enemy.points;
+                        const newInventory = [...prev.inventory, { ...enemy, type: 'trophy' }];
+                        const newMissions = prev.missions.map(m => {
+                            if (m.type === 'defeat' && !m.completed) {
+                                const newCurrent = m.current + 1;
+                                return { ...m, current: newCurrent, completed: newCurrent >= m.target };
+                            }
+                            return m;
+                        });
+                        return { ...prev, score: newScore, inventory: newInventory, missions: newMissions };
+                    });
+                    return;
+                }
+                setTurn('enemy');
             };
             
-            // ... resto da lógica de batalha
+            useEffect(() => {
+                if (turn === 'enemy' && !battleResult) {
+                    setTimeout(() => {
+                        const damageReceived = Math.floor(Math.random() * enemy.damage) + 1;
+                        setMessage(`${enemy.name} atacou e causou ${damageReceived} de dano!`);
+                        setPlayerShake(true);
+                        setTimeout(() => setPlayerShake(false), 300);
+                        audio.play('sfx-hit');
+                        
+                        setPlayerState(prev => {
+                           const newHP = Math.max(0, prev.playerHP - damageReceived);
+                           if (newHP <= 0) {
+                               setBattleResult('lose');
+                               setMessage('Você foi derrotado!');
+                               audio.stop('bg-music');
+                               audio.play('sfx-lose');
+                           }
+                           return { ...prev, playerHP: newHP };
+                        });
+                        setTurn('player');
+                    }, 1500);
+                }
+            }, [turn, battleResult]);
             
+            const handleEndBattle = () => {
+                setView('map');
+                audio.loop('bg-music');
+            }
+
             return (
                 <div className="flex flex-col items-center justify-between h-screen bg-black p-4 animate-fadeIn">
-                    {/* UI da Batalha */}
+                    {/* ENEMY INFO */}
+                    <div className="w-full text-center">
+                        <div className={`text-9xl mb-4 transition-transform duration-300 ${enemyShake ? 'animate-shake' : ''}`}>{enemy.icon}</div>
+                        <h2 className="text-3xl font-bold">{enemy.name}</h2>
+                        <div className="w-full max-w-sm h-6 bg-gray-700 rounded-full overflow-hidden mt-2 border-2 border-gray-500 mx-auto">
+                           <div className="h-full bg-red-600 transition-all duration-500" style={{ width: `${(enemyHP / enemy.hp) * 100}%`}}></div>
+                        </div>
+                        <p className="text-lg">{enemyHP} / {enemy.hp} HP</p>
+                    </div>
+
+                    {/* PLAYER INFO & ACTIONS */}
+                    <div className="w-full text-center">
+                        <p className="text-xl h-12">{message}</p>
+                        {!battleResult && (
+                             <div className="flex space-x-4 mt-4 w-full max-w-sm mx-auto">
+                                <button onClick={playerAttack} disabled={turn !== 'player'} className="bg-red-700 hover:bg-red-800 disabled:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg text-2xl w-full">ATACAR</button>
+                            </div>
+                        )}
+                        {battleResult && (
+                             <div className="mt-4">
+                                <h3 className={`text-5xl font-bold ${battleResult === 'win' ? 'text-green-500' : 'text-red-500'}`}>{battleResult === 'win' ? 'VITÓRIA!' : 'DERROTA!'}</h3>
+                                {battleResult === 'win' && <p className="text-yellow-400 text-2xl">+{enemy.points} pontos!</p>}
+                                <button onClick={handleEndBattle} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-lg text-xl">Continuar</button>
+                            </div>
+                        )}
+                         <div className={`text-5xl mt-8 transition-transform duration-300 ${playerShake ? 'animate-shake' : ''}`}>🏃</div>
+                    </div>
                 </div>
             );
         };
         
         const InventoryView = ({ inventory, onClose }) => {
+             const groupedInventory = inventory.reduce((acc, item) => {
+                acc[item.id] = acc[item.id] || { ...item, count: 0 };
+                acc[item.id].count++;
+                return acc;
+            }, {});
+
              return (
-                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 animate-fadeIn">
-                   {/* UI do Inventário */}
-                   <button onClick={onClose}>Fechar</button>
+                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn">
+                   <h2 className="text-4xl font-bold mb-6 text-center text-yellow-400">Inventário</h2>
+                   <div className="flex-grow overflow-y-auto pr-2">
+                       {Object.values(groupedInventory).length > 0 ? (
+                           <ul className="space-y-3">
+                               {Object.values(groupedInventory).map(item => (
+                                   <li key={item.id} className="flex items-center bg-gray-800 p-3 rounded-lg">
+                                       <div className="text-4xl mr-4">{item.icon}</div>
+                                       <div className="flex-grow">
+                                           <p className="font-bold text-lg">{item.name}</p>
+                                           <p className="text-sm text-gray-400">{item.rarity}</p>
+                                       </div>
+                                       <div className="text-2xl font-bold">x{item.count}</div>
+                                   </li>
+                               ))}
+                           </ul>
+                       ) : (
+                           <p className="text-center text-gray-400 mt-8">Seu inventário está vazio.</p>
+                       )}
+                   </div>
+                   <button onClick={onClose} className="mt-6 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg text-xl w-full max-w-xs mx-auto">FECHAR</button>
                 </div>
              )
         };
         
-        // ... Outros componentes de View (MenuView, CollectView, MissionsView, HUD)
-
-        // --- INICIALIZAÇÃO DO APP ---
+        const MissionsView = ({ missions, onClose }) => {
+            return (
+                <div className="absolute inset-0 bg-black bg-opacity-90 z-50 p-4 flex flex-col animate-fadeIn">
+                   <h2 className="text-4xl font-bold mb-6 text-center text-yellow-400">Missões</h2>
+                   <div className="flex-grow overflow-y-auto pr-2">
+                       <ul className="space-y-3">
+                           {missions.map(mission => (
+                               <li key={mission.id} className={`flex flex-col bg-gray-800 p-3 rounded-lg ${mission.completed ? 'border-2 border-green-500' : ''}`}>
+                                   <p className="font-bold text-lg">{mission.text}</p>
+                                   <div className="w-full h-5 bg-gray-700 rounded-full overflow-hidden mt-2 border border-gray-500">
+                                      <div className="h-full bg-yellow-500 transition-all duration-500 text-right pr-2 text-black text-sm" style={{ width: `${(mission.current / mission.target) * 100}%`}}>
+                                          {mission.current} / {mission.target}
+                                      </div>
+                                   </div>
+                                   {mission.completed && <p className="text-green-400 font-bold text-center mt-2">CONCLUÍDA!</p>}
+                               </li>
+                           ))}
+                       </ul>
+                   </div>
+                   <button onClick={onClose} className="mt-6 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg text-xl w-full max-w-xs mx-auto">FECHAR</button>
+                </div>
+            )
+        };
+        
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
